@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>职位来源与采集</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --line: #e4e7ec;
+    --line-soft: #eef0f3;
+    --text: #101828;
+    --muted: #667085;
+    --faint: #98a2b3;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --warn: #b54708;
+    --warn-bg: #fffaeb;
+    --err: #b42318;
+    --err-bg: #fef3f2;
+    --ok: #067647;
+    --ok-bg: #ecfdf3;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .04);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13.5px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; height: 52px;
+    padding: 0 20px; background: var(--panel);
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .meta {
+    color: var(--muted); font-size: 12px; margin-left: auto;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px; background: var(--bg);
+  }
+  header .meta::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+  header .meta.online::before { background: var(--ok); }
+  header .meta.offline::before { background: var(--err); }
+
+  .layout { display: flex; align-items: flex-start; min-height: calc(100vh - 52px); }
+  nav {
+    width: 178px; flex: none; padding: 14px 10px;
+    border-right: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 52px; align-self: flex-start;
+    min-height: calc(100vh - 52px);
+  }
+  nav button {
+    display: block; width: 100%; text-align: left; padding: 8px 12px; margin-bottom: 2px;
+    border: 0; background: transparent; border-radius: 8px; color: var(--muted);
+    font: inherit; cursor: pointer; transition: background .12s, color .12s;
+    white-space: nowrap;
+  }
+  nav button:hover { background: var(--bg); color: var(--text); }
+  nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { flex: 1; min-width: 0; padding: 22px 26px 48px; max-width: 1120px; }
+  main.wide { max-width: none; }
+  section { display: none; }
+  section.active { display: block; animation: fade .16s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 14px; margin: 0 0 14px; font-weight: 600; letter-spacing: .2px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px;
+    box-shadow: var(--shadow);
+  }
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin: 0 0 6px; }
+  input, select, textarea {
+    width: 100%; height: 36px; padding: 0 11px;
+    border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; background: #fff; color: var(--text);
+    transition: border-color .12s, box-shadow .12s;
+  }
+  input:hover, select:hover, textarea:hover { border-color: #cfd4dc; }
+  input:focus, select:focus, textarea:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+  }
+  input::placeholder, textarea::placeholder { color: var(--faint); }
+  select {
+    appearance: none; padding-right: 30px; cursor: pointer;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 8l3-3.5' fill='none' stroke='%23667085' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 11px center;
+  }
+  textarea {
+    height: auto; min-height: 140px; padding: 10px 11px; resize: vertical;
+    font-family: ui-monospace, Consolas, "Cascadia Mono", monospace; font-size: 12.5px; line-height: 1.65;
+  }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 160px; }
+  .row > div.span2 { flex: 2; }
+  .row + .row { margin-top: 14px; }
+  /* 紧凑行内字段：label 与输入同排，每个框按内容定宽，不撑满整行 */
+  .ifield { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .ifield > label { margin: 0; white-space: nowrap; flex: none; }
+  .ifield > input, .ifield > select { flex: none; }
+  .ifield input.kw   { width: 200px; }
+  .ifield input.city { width: 144px; }
+  .ifield input.num  { width: 80px; }
+  .ifield select.sel { width: 104px; }
+  .ifield input.url  { flex: 1; min-width: 200px; }
+  .ifield > button { flex: none; }
+
+  button {
+    height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--text); font: inherit; font-weight: 500;
+    cursor: pointer; transition: background .12s, border-color .12s, box-shadow .12s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  button:hover { background: #fbfcfd; border-color: #cfd4dc; }
+  button:active { background: #f4f5f7; }
+  button:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, .16); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #1d4ed8; }
+  button.danger { background: var(--err-bg); border-color: #fecdca; color: var(--err); }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .actions { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+
+  .hint { color: var(--muted); font-size: 12px; }
+  .hint.warn { color: var(--warn); }
+  .hint.err { color: var(--err); }
+  .badge {
+    display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+    background: var(--bg); color: var(--muted); margin-left: 6px; font-weight: 500;
+  }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); }
+
+  #errorBanner {
+    background: var(--err-bg); color: var(--err); padding: 10px 14px;
+    border: 1px solid #fecdca; border-radius: 8px; margin-bottom: 14px; font-size: 13px;
+  }
+  #errorBanner.hidden { display: none; }
+
+  /* 主从布局 */
+  .split { display: flex; gap: 16px; align-items: flex-start; }
+  .split .left { width: 360px; flex: none; }
+  .split .right { flex: 1; min-width: 0; }
+  @media (max-width: 1080px) { .split { flex-direction: column; } .split .left { width: 100%; } }
+
+  .list { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .list .head {
+    display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft); background: #fafbfc;
+  }
+  .list .head input { height: 30px; flex: 1; }
+  /* 采集状态：嵌在来源列表头部，不单独占卡片 */
+  .collect-status {
+    display: inline-flex; align-items: center; gap: 8px; flex: none;
+    font-size: 12px; color: var(--accent); background: var(--accent-soft);
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .collect-status.done { color: var(--ok); background: var(--ok-bg); }
+  .collect-status.failed { color: var(--err); background: var(--err-bg); }
+  .collect-status button { height: 24px; padding: 0 9px; font-size: 11px; }
+  .list .toolbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 8px 14px; border-bottom: 1px solid var(--line-soft); background: #fff;
+    font-size: 12px; color: var(--muted);
+  }
+  .list .toolbar label { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .list .toolbar select {
+    height: 26px; padding: 0 6px; border: 1px solid var(--line);
+    border-radius: 6px; background: #fff; color: var(--text); font-size: 12px;
+  }
+  .list-meta {
+    display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap;
+    padding: 7px 14px; border-bottom: 1px solid var(--line-soft);
+    font-size: 12px; color: var(--muted); background: #fff;
+  }
+  .list-meta .mi { white-space: nowrap; }
+  .list-meta b { color: var(--text); }
+  .list-meta .fresh { color: var(--ok); }
+  .list-meta .ts { margin-left: auto; color: var(--accent); font-weight: 500; }
+  .src-row .new-flag {
+    color: var(--ok); background: var(--ok-bg); font-size: 10px;
+    padding: 1px 6px; border-radius: 999px; margin-left: 8px; font-weight: 600;
+  }
+  .src-row {
+    padding: 11px 14px; border-bottom: 1px solid var(--line-soft); cursor: pointer;
+    transition: background .12s;
+  }
+  .src-row:hover { background: var(--bg); }
+  .src-row.selected { background: var(--accent-soft); }
+  .src-row .t { font-weight: 500; }
+  .src-row .s { color: var(--muted); font-size: 12px; margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .src-row .flag { color: var(--warn); font-size: 11px; }
+
+  .detail h3 { margin: 0 0 6px; font-size: 16px; }
+  .detail-sub { color: var(--muted); font-size: 12.5px; margin-bottom: 12px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  table.kv { width: 100%; border-collapse: collapse; }
+  table.kv td { padding: 7px 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; font-size: 13px; }
+  table.kv td.k { width: 96px; color: var(--muted); white-space: nowrap; }
+  .jd-body {
+    background: #fafbfc; border: 1px solid var(--line-soft); border-radius: 8px;
+    padding: 12px 14px; white-space: pre-wrap; word-break: break-word;
+    font-size: 13px; line-height: 1.7; max-height: 420px; overflow: auto;
+  }
+  .link { color: var(--accent); text-decoration: none; }
+  .link:hover { text-decoration: underline; }
+
+  /* 待裁决 */
+  .conflict-box { border: 1px solid #fecdca; border-radius: var(--radius); padding: 14px 16px; background: #fff; }
+  .conflict-box h4 { margin: 0 0 8px; font-size: 14px; }
+  .reco {
+    background: var(--ok-bg); border: 1px solid #abefc6; color: var(--ok);
+    padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12.5px;
+  }
+  .reco.neutral { background: var(--bg); border-color: var(--line); color: var(--muted); }
+  .diff-item { margin-bottom: 14px; }
+  .diff-item .field { font-weight: 600; margin-bottom: 6px; }
+  .diff-pair { display: flex; gap: 12px; }
+  .diff-side {
+    flex: 1; min-width: 0; background: #fff; border: 1px solid #fecdca; border-radius: 6px;
+    padding: 8px 10px; cursor: pointer; transition: border-color .12s, box-shadow .12s;
+  }
+  .diff-side:hover { border-color: #f97066; }
+  .diff-side.picked { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37, 99, 235, .14); }
+  .diff-side.suggested { border-color: var(--ok); box-shadow: 0 0 0 2px rgba(6, 118, 71, .12); }
+  .diff-side.new { border-color: #b2ddff; }
+  .diff-side h5 {
+    margin: 0 0 6px; font-size: 12px; display: flex; align-items: center; gap: 6px;
+    color: var(--muted); font-weight: 600;
+  }
+  .diff-side pre {
+    margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 12.5px;
+    font-family: inherit; line-height: 1.6; max-height: 240px; overflow: auto;
+  }
+  .diff-side .tick { display: none; color: var(--ok); }
+  .diff-side.picked .tick { display: inline; }
+  .diff-side .sug-tag { display: none; color: var(--ok); }
+  .diff-side.suggested .sug-tag { display: inline; }
+  mark { background: #ffe9a8; padding: 0 1px; border-radius: 2px; }
+  .gap { color: var(--faint); border-bottom: 1px dashed var(--faint); }
+
+  .company-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-top: 14px; }
+  .company-box h4 { margin: 0 0 8px; font-size: 13px; }
+
+  .tasks .task { padding: 10px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 10px; }
+  .tasks .task .st { font-weight: 500; }
+</style>
+</head>
+<body>
+<header>
+  <h1>职位来源与采集</h1>
+  <span class="meta" id="svcMeta">本机 · 连接中</span>
+</header>
+<div class="layout">
+  <nav>
+    <button data-tab="sources" class="active">来源</button>
+    <button data-tab="companies">公司</button>
+    <button data-tab="conflicts">待裁决</button>
+    <button data-tab="tasks">任务</button>
+  </nav>
+  <main>
+    <div id="errorBanner" class="hidden"></div>
+
+    <section id="tab-sources" class="active">
+      <h2>职位来源</h2>
+
+      <!-- 采集：参数和进度就地放在来源页，采集结果就是下面的来源列表 -->
+      <details class="card" id="collectPanel" open>
+        <summary style="cursor:pointer;font-weight:600;font-size:13px;list-style:none;display:flex;align-items:center;gap:8px">
+          <span style="color:var(--accent)">＋</span> 采集职位
+          <span class="hint" id="collectHint" style="font-weight:400">正在检测…</span>
+        </summary>
+        <div style="margin-top:14px">
+          <div class="ifield">
+            <label>渠道</label>
+            <select id="collectChannel" class="sel"></select>
+            <button id="btnRecheck" class="ghost" style="height:30px;font-size:12px" title="重新检测登录态">重检</button>
+            <button id="btnStartBrowser" class="ghost" style="height:30px;font-size:12px;display:none" title="启动带调试端口的 BOSS 浏览器">启动浏览器</button>
+            <label>关键词</label>
+            <input id="collectKeyword" class="kw" placeholder="如 AI 产品经理" title="搜索关键词，必填" />
+            <label>城市</label>
+            <input id="collectCities" class="city" placeholder="成都, 重庆" title="多个城市用逗号分隔，必填" />
+            <label>条数</label>
+            <input id="collectMaxCards" class="num" type="number" min="1" max="500" value="100" title="1–500" />
+            <button class="primary" id="btnCollect" style="flex:none">开始采集</button>
+          </div>
+          <div class="ifield" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)">
+            <label>单链接</label>
+            <input id="collectUrl" class="url" placeholder="https://www.zhipin.com/job_detail/….html" />
+            <button id="btnCollectUrl" style="flex:none">采集</button>
+            <span class="hint" id="collectEstimate" style="margin:0;white-space:nowrap"></span>
+          </div>
+          <div class="ifield" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)">
+            <label>材料导入</label>
+            <input id="importFile" type="file" style="height:30px;width:auto;flex:1;min-width:180px" title="截图/JD/邮件/链接文本等原件，单项不超过 20 MiB" />
+            <select id="importType" class="sel" title="原件类型">
+              <option value="text">文本/JD</option><option value="html">HTML</option>
+              <option value="image">截图</option><option value="email">邮件</option><option value="file">文件</option>
+            </select>
+            <button id="btnImport" style="flex:none">上传并导入</button>
+            <span class="hint" id="importHint" style="margin:0;white-space:nowrap"></span>
+          </div>
+        </div>
+      </details>
+
+      <div class="split">
+        <div class="left">
+          <div class="list">
+            <div class="head">
+              <input id="srcSearch" placeholder="搜索岗位 / 公司" />
+              <span id="collectStatus" class="collect-status" style="display:none"></span>
+            </div>
+            <div class="toolbar">
+              <label>渠道 <select id="srcFilterChannel">
+                <option value="">全部</option><option value="boss">BOSS</option>
+              </select></label>
+              <label>城市 <select id="srcFilterCity"><option value="">全部</option></select></label>
+              <label>状态 <select id="srcFilterStatus">
+                <option value="active">有效</option><option value="inactive">已停用</option><option value="">全部</option>
+              </select></label>
+              <label>薪资 <select id="srcFilterSalary">
+                <option value="">全部</option><option value="has">有薪资</option><option value="none">无薪资</option>
+              </select></label>
+              <label>冲突 <select id="srcFilterConflict">
+                <option value="">全部</option><option value="yes">待裁决</option><option value="no">无冲突</option>
+              </select></label>
+              <label>排序 <select id="srcSort">
+                <option value="updated_desc">最近更新</option>
+                <option value="created_desc">最近新增</option>
+                <option value="salary_desc">薪资高→低</option>
+                <option value="company">公司名</option>
+              </select></label>
+            </div>
+            <div id="srcListMeta" class="list-meta"></div>
+            <div id="srcList"></div>
+          </div>
+        </div>
+        <div class="right" id="srcDetail">
+          <div class="card hint">点击左侧来源查看详情</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-companies">
+      <h2>公司来源</h2>
+      <div class="list">
+        <div class="head"><input id="comSearch" placeholder="搜索公司" /></div>
+        <div id="comList"></div>
+      </div>
+      <div id="comDetail"></div>
+    </section>
+
+    <section id="tab-conflicts">
+      <h2>待裁决</h2>
+      <div id="conflictList"></div>
+    </section>
+
+    <section id="tab-tasks">
+      <h2>任务</h2>
+      <div class="tasks list" id="taskList"></div>
+      <div id="taskDetail"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const API = "/api/jobjobvein";
+const el = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let capabilities = null;
+
+const FIELD_LABELS = {
+  title_raw: "岗位", company_name_raw: "公司", location_raw: "工作地点",
+  salary_raw: "薪资", requirements_raw: "经验学历", description_raw: "JD 正文",
+  legal_name_raw: "工商全名", address_raw: "地址", established_raw: "成立时间",
+  registered_capital_raw: "注册资本", scale_raw: "公司规模", profile_raw: "公司简介",
+  business_info_raw: "经营范围", jobs_reported_count_raw: "在招总数",
+  recruiter: "招聘人", recruiter_title: "招聘人职位",
+};
+
+function showError(message) {
+  const banner = el("errorBanner");
+  if (!message) { banner.classList.add("hidden"); return; }
+  banner.textContent = message;
+  banner.classList.remove("hidden");
+}
+
+const ARTIFACT_BASE = API + "/artifacts/";
+const EVIDENCE_ROLE = {
+  user_material: "用户材料", job_page: "职位页原件", company_profile: "公司主页原件",
+  company_jobs: "公司招聘页原件", ocr_text: "OCR 文本",
+};
+// 02 规格 4.4：每份原件按角色列出，附字段依据与时间；原件按附件下载，不内联执行。
+function evidenceHtml(evidence, fallback) {
+  const refs = (evidence && evidence.evidence_refs) || [];
+  const seen = new Set();
+  const rows = [];
+  for (const ref of refs) {
+    const id = ref && ref.artifact_id;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const role = EVIDENCE_ROLE[ref.role] || ref.role || "原件";
+    const names = (ref.field_names || []).map(f => FIELD_LABELS[f] || f).join("、");
+    rows.push(`<tr><td class="k">${esc(role)}</td><td><a class="link" href="${ARTIFACT_BASE}${encodeURIComponent(id)}" target="_blank">${esc(id)}</a>${names ? `<div class="hint">依据：${esc(names)}</div>` : ""}</td></tr>`);
+  }
+  if (!rows.length && fallback && fallback.artifact_id) {
+    rows.push(`<tr><td class="k">当前原件</td><td><a class="link" href="${ARTIFACT_BASE}${encodeURIComponent(fallback.artifact_id)}" target="_blank">${esc(fallback.artifact_id)}</a></td></tr>`);
+  }
+  const at = (evidence && evidence.captured_at) || (fallback && fallback.captured_at);
+  if (at) rows.push(`<tr><td class="k">取得时间</td><td>${esc(timeText(at))}</td></tr>`);
+  return rows.length
+    ? `<div class="company-box"><h4>原件与证据</h4><table class="kv">${rows.join("")}</table></div>`
+    : "";
+}
+
+async function api(path, options = {}) {
+  const init = { method: options.method || "GET", headers: {} };
+  if (options.body !== undefined) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(options.body);
+  }
+  const response = await fetch(API + path, init);
+  let payload = null;
+  try { payload = await response.json(); } catch (e) { /* 非 JSON */ }
+  if (!response.ok) {
+    const err = (payload && payload.error) || {};
+    const text = [err.message || `请求失败 ${response.status}`, err.error_code, err.object_id].filter(Boolean).join(" · ");
+    if (!options.quiet) showError(text);
+    throw new Error(text);
+  }
+  if (!options.quiet) showError("");
+  return payload ? payload.data : null;
+}
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    el("tab-" + btn.dataset.tab).classList.add("active");
+    document.querySelector("main").classList.toggle("wide", btn.dataset.tab === "sources");
+    if (btn.dataset.tab === "sources") querySources();
+    if (btn.dataset.tab === "companies") queryCompanies();
+    if (btn.dataset.tab === "conflicts") queryConflicts();
+    if (btn.dataset.tab === "tasks") queryTasks();
+  });
+});
+
+async function refreshCapabilities(force) {
+  capabilities = await api("/capabilities" + (force ? "?fresh=1" : ""));
+  const channels = (capabilities.channels || []).filter(c => (c.actions || []).length);
+  const prev = el("collectChannel").value;
+  el("collectChannel").innerHTML = channels.map(c =>
+    `<option value="${esc(c.channel)}"${c.ready ? "" : " data-notready=1"}>${esc(c.channel)}${c.ready ? "" : "（未就绪）"}</option>`
+  ).join("");
+  if (prev && channels.some(c => c.channel === prev)) el("collectChannel").value = prev;
+  const boss = (capabilities.channels || []).find(c => c.channel === "boss");
+  if (boss) {
+    el("collectHint").textContent = boss.ready
+      ? "已就绪：" + (boss.login_state_text || "调试浏览器已登录 BOSS")
+      : "未就绪（" + (boss.login_state || "unknown") + "）：" + (boss.login_state_text || (boss.prerequisites || []).join("；")) + "。登录请在浏览器里完成。";
+    el("collectHint").dataset.ready = boss.ready ? "1" : "0";
+    // 端口不通/未知时提供一键启动入口；已登录或登录页已打开时不必再启动。
+    const startBtn = el("btnStartBrowser");
+    if (startBtn) startBtn.style.display = (!boss.ready && ["unreachable", "unknown"].includes(boss.login_state)) ? "" : "none";
+  }
+  // 预填默认搜索条件：用户直接点"开始采集"就能采，不空跑。用户改过的值不覆盖。
+  const def = capabilities.default_search || {};
+  const kw = el("collectKeyword"), city = el("collectCities");
+  if (kw && !kw.dataset.touched && def.keyword) kw.value = def.keyword;
+  if (city && !city.dataset.touched && (def.cities || []).length) city.value = def.cities.join(", ");
+}
+
+async function bootstrap() {
+  try {
+    await refreshCapabilities();
+    el("svcMeta").textContent = "本机 · 已连接";
+    el("svcMeta").className = "meta online";
+  } catch (e) {
+    el("svcMeta").textContent = "本机 · 连接失败";
+    el("svcMeta").className = "meta offline";
+  }
+  querySources();
+}
+
+// ---------- 来源 ----------
+let selectedSourceId = null;
+let collectSince = null;   // 本次采集开始时间（ms），用于标"新"
+
+function timeText(v) {
+  if (!v) return "-";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v).slice(0, 19).replace("T", " ") || String(v);
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// 薪资上限（K/元每天统一折算成"月薪数值"只是为了排序，不用于展示）
+function salaryRank(raw) {
+  if (!raw) return -1;
+  const m = String(raw).match(/(\d+(?:\.\d+)?)\s*[-~]\s*(\d+(?:\.\d+)?)/);
+  if (!m) return -1;
+  const hi = parseFloat(m[2]);
+  if (/元\s*\/\s*天|元\/天|天/.test(raw)) return hi * 21.7 / 1000; // 日薪折成 K 量级
+  return hi; // K
+}
+
+async function querySources() {
+  const kw = el("srcSearch").value.trim();
+  const params = new URLSearchParams({ page_size: "100" });
+  if (kw) params.set("keyword", kw);
+  const data = await api("/sources?" + params.toString(), { quiet: true });
+  let items = data.items || [];
+
+  // 本地筛选
+  const ch = el("srcFilterChannel").value;
+  const city = el("srcFilterCity").value;
+  const status = el("srcFilterStatus").value;
+  const sal = el("srcFilterSalary").value;
+  const conflict = el("srcFilterConflict").value;
+  items = items.filter(s => {
+    if (ch && s.channel !== ch) return false;
+    if (city && (s.location_raw || "") !== city) return false;
+    if (status && (s.status || "active") !== status) return false;
+    if (sal === "has" && !s.salary_raw) return false;
+    if (sal === "none" && s.salary_raw) return false;
+    if (conflict === "yes" && !s.has_pending_conflict) return false;
+    if (conflict === "no" && s.has_pending_conflict) return false;
+    return true;
+  });
+
+  // 本地排序
+  const sort = el("srcSort").value;
+  const t = v => v ? (new Date(v).getTime() || 0) : 0;
+  const isFresh = s => collectSince && s.created_at && t(s.created_at) >= collectSince;
+  items.sort((a, b) => {
+    // 本次采集新建的强制置顶，让用户一眼看到刚抓到的数据
+    if (isFresh(a) !== isFresh(b)) return isFresh(a) ? -1 : 1;
+    if (sort === "updated_desc") return t(b.updated_at) - t(a.updated_at);
+    if (sort === "created_desc") return t(b.created_at) - t(a.created_at);
+    if (sort === "salary_desc") return salaryRank(b.salary_raw) - salaryRank(a.salary_raw);
+    if (sort === "company") return (a.company_name_raw || "").localeCompare(b.company_name_raw || "", "zh");
+    return 0;
+  });
+
+  // 城市下拉选项：从当前数据去重生成（保留用户已选）
+  const citySel = el("srcFilterCity");
+  const cities = [...new Set((data.items || []).map(s => s.location_raw).filter(Boolean))].sort();
+  const prevCity = citySel.value;
+  citySel.innerHTML = '<option value="">全部</option>' + cities.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  if (cities.includes(prevCity)) citySel.value = prevCity;
+
+  const fresh = items.filter(s => collectSince && s.created_at && t(s.created_at) >= collectSince).length;
+  const updated = items.filter(s => collectSince && s.updated_at && s.created_at &&
+    t(s.updated_at) >= collectSince && t(s.created_at) < collectSince).length;
+  const lastAt = items.reduce((m, s) => Math.max(m, t(s.updated_at)), 0);
+  el("srcListMeta").innerHTML =
+    `<span class="mi">共 <b>${items.length}</b> 条</span>` +
+    (collectSince ? `<span class="mi">本次新增 <b class="fresh">${fresh}</b> 条</span><span class="mi">更新 <b class="fresh">${updated}</b> 条</span>` : "") +
+    (lastAt ? `<span class="mi ts">更新于 ${esc(timeText(lastAt))}</span>` : "");
+  el("srcList").innerHTML = items.map(s => {
+    const isNew = collectSince && s.created_at && t(s.created_at) >= collectSince;
+    const tm = s.updated_at ? timeText(s.updated_at) : "-";
+    return `
+    <div class="src-row${s.source_id === selectedSourceId ? " selected" : ""}" data-id="${esc(s.source_id)}">
+      <div class="t">${esc(s.title_raw || "(无岗位名)")}${isNew ? '<span class="new-flag">新</span>' : ""}${s.has_pending_conflict ? '<span class="flag">待裁决</span>' : ""}</div>
+      <div class="s">
+        <span>${esc(s.company_name_raw || "-")}</span>
+        <span>${esc(s.salary_raw || "-")}</span>
+        <span>${esc(s.location_raw || "-")}</span>
+        <span title="更新时间">${esc(tm)}</span>
+      </div>
+    </div>`;
+  }).join("") || '<div class="src-row hint">没有来源（试试调整筛选条件）</div>';
+  el("srcList").querySelectorAll(".src-row[data-id]").forEach(row => {
+    row.addEventListener("click", () => {
+      selectedSourceId = row.dataset.id;
+      el("srcList").querySelectorAll(".src-row").forEach(r => r.classList.remove("selected"));
+      row.classList.add("selected");
+      openSource(row.dataset.id);
+    });
+  });
+}
+
+async function openSource(sourceId, fromTab) {
+  if (fromTab === "companies") {
+    switchTab("sources");
+    selectedSourceId = sourceId;
+  }
+  const detail = await api("/sources/" + sourceId, { quiet: true });
+  const f = detail;
+  const fields = Object.keys(FIELD_LABELS).filter(k => f[k] != null && f[k] !== "");
+  const kv = fields.map(k => `<tr><td class="k">${esc(FIELD_LABELS[k] || k)}</td><td>${esc(String(f[k]))}</td></tr>`).join("");
+  const extra = f.extra_raw ? Object.entries(f.extra_raw).map(([k, v]) =>
+    `<tr><td class="k">${esc(FIELD_LABELS[k] || k)}</td><td>${esc(String(v))}</td></tr>`).join("") : "";
+  const company = f.company_source && f.company_source.company_source_id
+    ? `<div class="company-box"><h4>公司</h4><div>${esc(f.company_source.company_name_raw || f.company_source.legal_name_raw || "-")}</div></div>`
+    : `<div class="company-box"><h4>公司</h4><div class="hint">${esc((f.company_source && f.company_source.missing_reason) || "未关联")}</div></div>`;
+  const issues = (f.issues || []).length
+    ? `<div class="hint warn" style="margin-top:10px">${(f.issues || []).map(i => esc(i.message || i.code)).join("；")}</div>` : "";
+  const conflictBtn = f.pending_conflict_id
+    ? `<button class="primary" onclick="openConflict('${esc(f.pending_conflict_id)}')">查看待裁决</button>` : "";
+  el("srcDetail").innerHTML = `
+    <div class="card detail">
+      <h3>${esc(f.title_raw || "(无岗位名)")}</h3>
+      <div class="detail-sub">${esc(f.company_name_raw || "-")} · ${esc(f.location_raw || "-")} · ${esc(f.salary_raw || "-")} · rev ${f.revision}</div>
+      <table class="kv">${kv}${extra}</table>
+      ${f.description_raw ? `<div style="margin-top:12px"><label>JD 正文</label><div class="jd-body">${esc(f.description_raw)}</div></div>` : ""}
+      ${f.source_url ? `<div style="margin-top:12px"><a class="link" href="${esc(f.source_url)}" target="_blank">查看原件链接</a></div>` : ""}
+        ${issues}
+        <div class="actions">
+          ${conflictBtn}
+          <button onclick="toggleSourceStatus('${esc(f.source_id)}', '${esc(f.status)}')">${f.status === "active" ? "停用" : "恢复"}</button>
+          <button onclick="recollectSource('${esc(f.source_id)}')">重采此职位</button>
+        </div>
+      </div>
+    ${company}
+    ${evidenceHtml(f.evidence, { artifact_id: f.artifact_id, captured_at: f.captured_at })}`;
+}
+
+async function recollectSource(sourceId) {
+  if (!confirm("按已保存的可靠引用重采这条职位？不会覆盖当前采用内容，变化会进入待裁决。")) return;
+  await newTask("recollect", { source_id: sourceId });
+  alert("已发起重采，稍后在「任务」页查看结果");
+  switchTab("tasks");
+}
+
+async function toggleSourceStatus(sourceId, current) {
+  const detail = await api("/sources/" + sourceId, { quiet: true });
+  const next = current === "active" ? "inactive" : "active";
+  await api(`/sources/${sourceId}/status`, { method: "PATCH", body: { status: next, expected_revision: detail.revision } });
+  openSource(sourceId);
+  querySources();
+}
+
+// ---------- 公司 ----------
+async function queryCompanies() {
+  const kw = el("comSearch").value.trim();
+  const params = new URLSearchParams({ page_size: "100" });
+  if (kw) params.set("keyword", kw);
+  const data = await api("/company-sources?" + params.toString(), { quiet: true });
+  const items = data.items || [];
+  el("comList").innerHTML = items.map(c => `
+    <div class="src-row" data-id="${esc(c.company_source_id)}">
+      <div class="t">${esc(c.company_name_raw || c.legal_name_raw || "(无公司名)")}${c.pending_conflict_id ? '<span class="flag">待裁决</span>' : ""}</div>
+      <div class="s"><span>${esc(c.scale_raw || "-")}</span><span>rev ${c.revision}</span></div>
+    </div>`).join("") || '<div class="src-row hint">没有公司来源</div>';
+  el("comList").querySelectorAll(".src-row[data-id]").forEach(row => {
+    row.addEventListener("click", () => openCompany(row.dataset.id));
+  });
+  el("comDetail").innerHTML = "";
+}
+
+async function openCompany(companyId) {
+  const c = await api("/company-sources/" + companyId, { quiet: true });
+  const fields = Object.keys(FIELD_LABELS).filter(k => c[k] != null && c[k] !== "");
+  const kv = fields.map(k => `<tr><td class="k">${esc(FIELD_LABELS[k] || k)}</td><td>${esc(String(c[k]))}</td></tr>`).join("");
+  const extra = c.extra_raw ? Object.entries(c.extra_raw).map(([k, v]) =>
+    `<tr><td class="k">${esc(FIELD_LABELS[k] || k)}</td><td>${esc(String(v))}</td></tr>`).join("") : "";
+  const jobs = c.latest_company_jobs || [];
+  const ps = c.latest_company_jobs_page_summary || {};
+  const scopeNote = ps.collected_count != null
+    ? `采到 ${ps.collected_count} 条${ps.reported_count_raw ? ` · 页面报 ${esc(ps.reported_count_raw)}` : ""}${ps.complete === false ? " · 受首屏/上限限制，非全部在招职位" : " · 首屏可见范围"}`
+    : "本次任务未采集到该公司的招聘页";
+  const jobRows = jobs.map(j => `
+    <div class="src-row" data-source="${esc(j.source_id || "")}">
+      <div class="t">${esc(j.title_raw || "(无岗位名)")}</div>
+      <div class="s">
+        <span>${esc(j.salary_raw || "-")}</span>
+        <span>${esc(j.location_raw || "-")}</span>
+        <span>${esc(j.requirements_raw || "-")}</span>
+      </div>
+    </div>`).join("") || '<div class="src-row hint">本次任务没有采集到首屏职位卡片</div>';
+  el("comDetail").innerHTML = `
+    <div class="card">
+      <h2>${esc(c.company_name_raw || c.legal_name_raw || "-")}</h2>
+      <div class="detail-sub">本库职位来源 ${c.source_count} 条 · rev ${c.revision}</div>
+      <table class="kv">${kv}${extra}</table>
+      ${c.source_url ? `<div style="margin-top:12px"><a class="link" href="${esc(c.source_url)}" target="_blank">查看公司页</a></div>` : ""}
+      <div class="actions">
+        <button class="primary" onclick="collectCompany('${esc(c.company_source_id)}')">收这家公司的在招职位</button>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h4>本次首屏职位 · ${jobs.length} 条${c.latest_company_jobs_task_id ? ` <span class="hint">任务 ${esc(c.latest_company_jobs_task_id)}</span>` : ""}</h4>
+      <div class="hint" style="margin:6px 0 10px">${scopeNote}；点岗位看详情，历史批次不混入。</div>
+      <div id="comJobs">${jobRows}</div>
+    </div>
+    ${evidenceHtml(c.evidence, { artifact_id: c.artifact_id, captured_at: c.captured_at })}`;
+  el("comDetail").querySelectorAll("#comJobs .src-row[data-source]").forEach(row => {
+    if (!row.dataset.source) return;
+    row.addEventListener("click", () => openSource(row.dataset.source, "companies"));
+  });
+}
+
+async function collectCompany(companyId) {
+  const taskId = "task_" + crypto.randomUUID().replace(/-/g, "");
+  await api("/tasks", { method: "POST", body: { task_id: taskId, task_type: "company_collect", company_source_id: companyId } });
+  await api(`/tasks/${taskId}/run`, { method: "POST", body: {} });
+  showError("");
+  alert("已发起公司采集任务，稍后在「任务」页查看结果");
+}
+
+// ---------- 冲突 ----------
+// 快照里的证据元数据不是业务内容，不参与差异判定（与后端 SNAPSHOT_META_FIELDS 一致）
+const SNAPSHOT_META_FIELDS = new Set(["artifact_id", "captured_at", "issues_json", "locator", "company_source_id", "revision", "evidence_refs"]);
+
+function normalizeConflictFields(f) {
+  const out = Object.assign({}, f || {});
+  // 与后端一致：渠道侧 extra_raw / 落库 extra_raw_json 视为同一字段
+  if ("extra_raw" in out && !("extra_raw_json" in out)) {
+    out.extra_raw_json = out.extra_raw;
+    delete out.extra_raw;
+  }
+  return out;
+}
+
+function conflictDiffFields(oldF, newF) {
+  oldF = normalizeConflictFields(oldF);
+  newF = normalizeConflictFields(newF);
+  const names = new Set([...Object.keys(oldF), ...Object.keys(newF)]);
+  const out = [];
+  for (const name of names) {
+    if (SNAPSHOT_META_FIELDS.has(name)) continue;
+    const cur = oldF[name] != null ? (typeof oldF[name] === "object" ? JSON.stringify(oldF[name]) : String(oldF[name])) : "";
+    const cand = newF[name] != null ? (typeof newF[name] === "object" ? JSON.stringify(newF[name]) : String(newF[name])) : "";
+    if (cur !== cand) out.push(name);
+  }
+  return out.sort();
+}
+
+async function queryConflicts() {
+  const data = await api("/conflicts?page_size=100", { quiet: true });
+  const items = data.items || [];
+  el("conflictList").innerHTML = items.map(c => {
+    const oldF = (c.old_snapshot && c.old_snapshot.fields) || {};
+    const newF = (c.new_snapshot && c.new_snapshot.fields) || {};
+    const name = oldF.title_raw || newF.title_raw || oldF.company_name_raw || newF.company_name_raw || "(未知)";
+    const diffs = conflictDiffFields(oldF, newF);
+    const diffText = diffs.length
+      ? diffs.map(f => FIELD_LABELS[f] || f).join("、")
+      : "仅原件不同（内容一致）";
+    return `<div class="src-row" data-id="${esc(c.conflict_id)}">
+      <div class="t">${esc(name)}</div>
+      <div class="s"><span style="color:var(--accent)">差异：${esc(diffText)}</span></div>
+      <div class="s"><span>状态 ${esc(c.status)}</span><span class="hint">点击查看逐字段对比</span></div>
+    </div>`;
+  }).join("") || '<div class="card hint">没有待裁决项</div>';
+  el("conflictList").querySelectorAll(".src-row[data-id]").forEach(row => {
+    row.addEventListener("click", () => openConflict(row.dataset.id));
+  });
+}
+
+function diffBounds(a, b) {
+  // 找首尾相同部分，中间标差异
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length, endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) { endA--; endB--; }
+  return { start, endA, endB };
+}
+
+function markSegment(text, start, end) {
+  if (text == null) return "";
+  const s = String(text);
+  const before = s.slice(0, start), mid = s.slice(start, end), after = s.slice(end);
+  return esc(before) + (mid ? `<mark>${esc(mid)}</mark>` : "") + esc(after);
+}
+
+let fieldChoices = {};  // {字段名: "old"|"new"}，逐字段选择
+
+async function openConflict(conflictId) {
+  // 先切到「待裁决」tab，否则从「来源」页点进来内容写进了后台容器，看起来像没反应
+  if (!document.querySelector('nav button[data-tab="conflicts"]').classList.contains("active")) {
+    document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === "conflicts"));
+    document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === "tab-conflicts"));
+  }
+  const c = await api("/conflicts/" + conflictId, { quiet: true });
+  fieldChoices = {};
+  if (c.status !== "pending") {
+    el("conflictList").innerHTML = `<div class="card hint">冲突已处理（${esc(c.status)}）</div>`;
+    return;
+  }
+  const oldF = normalizeConflictFields((c.old_snapshot && c.old_snapshot.fields) || {});
+  const newF = normalizeConflictFields((c.new_snapshot && c.new_snapshot.fields) || {});
+  // 只展示真实差异字段；排除证据元数据，无差异字段折叠
+  const diffFields = conflictDiffFields(oldF, newF);
+
+  const fieldText = v => v == null ? "" : (typeof v === "object" ? JSON.stringify(v, null, 2) : String(v));
+  const diffItems = diffFields.map(field => {
+    const cur = fieldText(oldF[field]);
+    const cand = fieldText(newF[field]);
+    const label = FIELD_LABELS[field] || field;
+    const b = diffBounds(cur, cand);
+    const oldEmpty = cur === "";
+    const newEmpty = cand === "";
+    return `<div class="diff-item" data-field="${esc(field)}">
+      <div class="field">${esc(label)} <span class="mono" style="color:var(--muted)">${esc(field)}</span></div>
+      <div class="diff-pair">
+        <div class="diff-side${oldEmpty ? "" : " suggested"}" data-side="old" role="radio" aria-checked="false" tabindex="0">
+          <h5>旧值 <span class="badge">当前在用</span><span class="tick">✓ 选中</span></h5>
+          <pre>${oldEmpty ? '<span class="hint">（空）</span>' : markSegment(cur, b.start, b.endA)}</pre>
+        </div>
+        <div class="diff-side new" data-side="new" role="radio" aria-checked="false" tabindex="0">
+          <h5>新值 <span class="badge">候选</span><span class="tick">✓ 选中</span></h5>
+          <pre>${newEmpty ? '<span class="hint">（空）</span>' : markSegment(cand, b.start, b.endB)}</pre>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const oldRev = (c.old_snapshot && c.old_snapshot.revision);
+  const oldAt = oldF.captured_at, newAt = newF.captured_at;
+  const changedCount = Object.keys(fieldChoices).length;
+  const artifactLine = (label, id, at) => id
+    ? `<div class="hint">${label}：<a class="link" href="${ARTIFACT_BASE}${encodeURIComponent(id)}" target="_blank">${esc(id)}</a>${at ? ` · 取得 ${esc(timeText(at))}` : ""}</div>`
+    : "";
+  el("conflictList").innerHTML = `
+    <div class="conflict-box">
+      <h4>待裁决：同一条来源重采到了不同内容</h4>
+      ${artifactLine("旧原件", c.old_artifact_id, oldAt)}
+      ${artifactLine("新原件", c.new_artifact_id, newAt)}
+      <div class="reco neutral">逐字段选择：点每个字段的「旧值」或「新值」决定该字段用哪边。黄底＝有差异。<b>没点的字段默认保留旧值</b>。</div>
+      <div class="actions" style="margin:8px 0">
+        <button id="btnPickAllOld" class="ghost">全部用旧</button>
+        <button id="btnPickAllNew" class="ghost">全部用新</button>
+      </div>
+      ${diffItems || '<div class="hint">字段没有差异，差异在原文原件（可直接全部用新，切换原件）。</div>'}
+      <div class="actions" style="margin-top:12px">
+        <button class="primary" id="btnSaveDecision" disabled>保存</button>
+        <span class="hint" id="decisionHint" style="margin:0">尚未选择任何字段（默认全部保留旧值，直接保存 = 全部用旧）</span>
+      </div>
+      <div class="hint" style="margin-top:8px">保存时会核对冲突基线版本（rev ${oldRev}），期间内容又变了会被拒绝。</div>
+    </div>`;
+
+  function refreshChoicesUI() {
+    const n = Object.keys(fieldChoices).length;
+    el("btnSaveDecision").disabled = false;
+    el("decisionHint").textContent = n > 0
+      ? `已选 ${n} 个字段（${Object.values(fieldChoices).filter(v => v === "new").length} 个用新，${Object.values(fieldChoices).filter(v => v === "old").length} 个用旧），其余保留旧值`
+      : "未单独选字段：保存 = 全部保留旧值";
+    // 逐字段高亮
+    el("conflictList").querySelectorAll(".diff-item").forEach(item => {
+      const f = item.dataset.field;
+      const side = fieldChoices[f];
+      item.querySelectorAll(".diff-side").forEach(s => {
+        s.classList.toggle("picked", side === s.dataset.side);
+        s.setAttribute("aria-checked", side === s.dataset.side ? "true" : "false");
+      });
+    });
+  }
+
+  // 逐字段选择：点某字段的旧值/新值
+  el("conflictList").querySelectorAll(".diff-item").forEach(item => {
+    const f = item.dataset.field;
+    item.querySelectorAll(".diff-side").forEach(side => {
+      side.addEventListener("click", () => {
+        fieldChoices[f] = side.dataset.side;
+        refreshChoicesUI();
+      });
+    });
+  });
+
+  el("btnPickAllOld").addEventListener("click", () => {
+    diffFields.forEach(f => { fieldChoices[f] = "old"; });
+    refreshChoicesUI();
+  });
+  el("btnPickAllNew").addEventListener("click", () => {
+    diffFields.forEach(f => { fieldChoices[f] = "new"; });
+    refreshChoicesUI();
+  });
+
+  el("btnSaveDecision").addEventListener("click", async () => {
+    // 只把「选了 new」的字段带进 keep_merge；其余字段（含没点的）保留旧值
+    const fields = {};
+    for (const [f, side] of Object.entries(fieldChoices)) {
+      if (side === "new") fields[f] = "new";
+    }
+    await api(`/conflicts/${conflictId}/decision`, { method: "POST", body: { decision: "keep_merge", expected_revision: oldRev, fields } });
+    showError("");
+    alert("已按字段级选择保存");
+    queryConflicts();
+    querySources();
+  });
+}
+
+// ---------- 采集 ----------
+el("btnRecheck").addEventListener("click", async () => {
+  const btn = el("btnRecheck");
+  btn.disabled = true;
+  try { await refreshCapabilities(true); } catch (e) { el("collectHint").textContent = "检测失败：" + (e && e.message ? e.message : e); }
+  finally { btn.disabled = false; }
+});
+
+el("btnStartBrowser").addEventListener("click", async () => {
+  const btn = el("btnStartBrowser");
+  btn.disabled = true;
+  const hint = el("collectHint");
+  hint.textContent = "正在启动调试浏览器…";
+  try {
+    const r = await api("/browser/start", { method: "POST", body: {} });
+    hint.textContent = (r.message || "已发出启动命令") + "，正在检测…";
+    await refreshCapabilities(true);
+  } catch (e) {
+    hint.textContent = "启动失败：" + (e && e.message ? e.message : e);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function updateEstimate() {
+  const cap = Math.max(1, Math.min(Number(el("collectMaxCards").value) || 100, 500));
+  el("collectEstimate").textContent = `最多 ${cap} 条（上限 500），跨页累计`;
+}
+el("collectMaxCards").addEventListener("input", updateEstimate);
+["collectKeyword", "collectCities"].forEach(id => {
+  el(id).addEventListener("input", e => { e.target.dataset.touched = "1"; });
+});
+updateEstimate();
+
+// 来源列表：搜索框防抖 + 筛选/排序下拉即时生效
+let srcSearchTimer = null;
+el("srcSearch").addEventListener("input", () => {
+  clearTimeout(srcSearchTimer);
+  srcSearchTimer = setTimeout(() => querySources(), 250);
+});
+["srcFilterChannel", "srcFilterCity", "srcFilterStatus", "srcFilterSalary", "srcFilterConflict", "srcSort"]
+  .forEach(id => el(id).addEventListener("change", () => querySources()));
+
+async function newTask(taskType, body) {
+  const taskId = "task_" + crypto.randomUUID().replace(/-/g, "");
+  await api("/tasks", { method: "POST", body: { task_id: taskId, task_type: taskType, ...body } });
+  const run = await api(`/tasks/${taskId}/run`, { method: "POST", body: {} });
+  return { taskId, run };
+}
+
+function switchTab(tab) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === "tab-" + tab));
+  document.querySelector("main").classList.toggle("wide", tab === "sources");
+  if (tab === "sources") querySources();
+  if (tab === "companies") queryCompanies();
+  if (tab === "conflicts") queryConflicts();
+  if (tab === "tasks") queryTasks();
+}
+
+el("btnCollect").addEventListener("click", async () => {
+  const btn = el("btnCollect");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = "提交中…";
+  const channel = el("collectChannel").value;
+  const keyword = el("collectKeyword").value.trim();
+  const cities = el("collectCities").value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+  const maxCards = Math.max(1, Math.min(Number(el("collectMaxCards").value) || 100, 500));
+  try {
+    const { taskId } = await newTask("collect", {
+      channel, keyword: keyword || null, cities,
+      limits: { max_candidates: maxCards, timeout_seconds: 600 },
+    });
+    showError("");
+    watchCollectProgress(taskId);
+  } catch (e) { /* api 已 showError */ }
+  finally { btn.disabled = false; btn.textContent = "开始采集"; }
+});
+
+el("btnCollectUrl").addEventListener("click", async () => {
+  const btn = el("btnCollectUrl");
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = "提交中…";
+  const url = el("collectUrl").value.trim();
+  if (!url) { btn.disabled = false; btn.textContent = "采集链接"; showError("请输入链接"); return; }
+  try {
+    const { taskId } = await newTask("collect", { channel: el("collectChannel").value, source_url: url, limits: { max_candidates: 1, timeout_seconds: 120 } });
+    showError("");
+    watchCollectProgress(taskId);
+  } catch (e) { /* api 已 showError */ }
+  finally { btn.disabled = false; btn.textContent = "采集链接"; }
+});
+
+// ---------- 材料导入 ----------
+el("btnImport").addEventListener("click", async () => {
+  const btn = el("btnImport"), hint = el("importHint");
+  const input = el("importFile");
+  const file = input.files && input.files[0];
+  if (!file) { hint.textContent = "请先选择文件"; return; }
+  if (file.size > 20 * 1024 * 1024) { hint.textContent = "超过 20 MiB 上限"; return; }
+  btn.disabled = true; hint.textContent = "上传中…";
+  try {
+    // 上传原件：multipart，不用 JSON 封装
+    const form = new FormData();
+    form.append("file", file);
+    form.append("content_type", el("importType").value);
+    form.append("acquired_at", new Date().toISOString());
+    const resp = await fetch(API + "/artifacts", { method: "POST", body: form });
+    const env = await resp.json();
+    if (!resp.ok) throw new Error((env.error && env.error.message) || "上传失败");
+    const art = env.data;
+    hint.textContent = `原件 ${art.artifact_id} · 校验中`;
+    const { taskId } = await newTask("import", {
+      channel: "manual",
+      ingest_origin: "manual_import",
+      materials: [{
+        channel: "manual",
+        artifact_id: art.artifact_id,
+        sha256: art.sha256,
+        raw_content: { type: el("importType").value, text: "" },
+      }],
+      limits: { timeout_seconds: 120 },
+    });
+    input.value = "";
+    showError("");
+    // 材料导入产出 material_saved，不进来源列表；直接到任务页看进度与结果。
+    switchTab("tasks");
+    watchTask(taskId);
+  } catch (e) {
+    hint.textContent = "导入失败：" + (e && e.message ? e.message : e);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- 采集进度：就地并入来源列表头部 ----------
+async function renderCollectProgress(id) {
+  const bar = el("collectStatus");
+  try {
+    const t = await api("/tasks/" + id, { quiet: true });
+    const results = await api(`/tasks/${id}/results?page_size=1`, { quiet: true });
+    const counts = (t.summary && t.summary.counts) || {};
+    const total = (results && results.total) || 0;
+    const done = ["finished", "failed", "stopped"].includes(t.status);
+    const statusLabel = STATUS_TEXT[t.status] || t.status;
+
+    // 进度就地作为列表头部一条状态，不再单独开卡片
+    bar.style.display = "";
+    bar.className = "collect-status" + (t.status === "failed" ? " failed" : done ? " done" : "");
+    const created = counts.source_created || 0;
+    const conflict = counts.conflict_pending || 0;
+    const outcome = t.summary && t.summary.outcome;
+    const elapsed = collectSince ? Math.max(0, Math.floor((Date.now() - collectSince) / 1000)) : 0;
+    const dur = elapsed >= 60 ? `${Math.floor(elapsed / 60)}分${elapsed % 60}秒` : `${elapsed}秒`;
+    let text;
+    if (t.status === "running") text = `采集中 · 已运行 ${dur} · 已读 ${total} 条`;
+    else if (t.status === "finished") {
+      const tail = [conflict ? `冲突 ${conflict}` : "", outcome === "partial" ? "部分完成" : "", outcome === "empty" ? "空结果" : ""].filter(Boolean).join(" · ");
+      text = `完成 · 用时 ${dur} · 新建 ${created} 条${tail ? " · " + tail : ""}`;
+    }
+    else if (t.status === "stopped") text = `已停止 · 用时 ${dur} · 已读 ${total} 条`;
+    else text = `失败${t.error_text ? " · " + t.error_text : ""}`;
+    const stopBtn = t.status === "running" ? `<button id="btnCollectStop">停止</button>` : "";
+    bar.innerHTML = `<span>${esc(text)}</span>${stopBtn}`;
+    if (stopBtn) {
+      el("btnCollectStop").addEventListener("click", async () => {
+        const b = el("btnCollectStop");
+        if (b.disabled) return;
+        b.disabled = true; b.textContent = "停止中…";  // 立即反馈，防止误以为没点上而狂点
+        try {
+          await api(`/tasks/${id}/stop`, { method: "POST", body: {} });
+          bar.querySelector("span").textContent = "正在停止，稍候…";
+          renderCollectProgress(id);
+        } catch (e) { b.disabled = false; b.textContent = "停止"; }
+      });
+    }
+
+    // 关键：采集过程中每轮都刷新来源列表，新抓到的数据直接出现在下方
+    await querySources();
+    if (done) stopWatching();
+  } catch (e) {
+    bar.style.display = "";
+    bar.className = "collect-status failed";
+    bar.textContent = "进度加载失败：" + esc(e.message || e);
+  }
+}
+
+function watchCollectProgress(id) {
+  stopWatching();
+  watchingTaskId = id;
+  collectSince = Date.now() - 2000;  // 本次采集起点，列表据此标"新"、统计新增/更新
+  if (!el("tab-sources").classList.contains("active")) switchTab("sources");
+  el("collectPanel").open = true;
+  renderCollectProgress(id);
+  taskTimer = setInterval(() => renderCollectProgress(id), 2000);
+}
+
+// ---------- 任务 ----------
+let taskTimer = null;
+let watchingTaskId = null;
+
+const STATUS_TEXT = { ready: "待运行", running: "采集中", finished: "已完成", failed: "失败", stopped: "已停止" };
+const COUNT_LABEL = {
+  source_created: "新建职位", company_created: "新建公司", unchanged: "无变化",
+  material_saved: "材料保存", conflict_pending: "待裁决", empty: "空页面", failed: "失败", pending: "处理中",
+};
+
+function stopWatching() {
+  if (taskTimer) { clearInterval(taskTimer); taskTimer = null; }
+  watchingTaskId = null;
+}
+
+async function renderTask(id) {
+  try {
+    const t = await api("/tasks/" + id, { quiet: true });
+    const results = await api(`/tasks/${id}/results?page_size=100`, { quiet: true });
+    const counts = (t.summary && t.summary.counts) || {};
+    const cities = (t.summary && t.summary.cities) || [];
+    const issues = (t.summary && t.summary.issues) || [];
+    const outcome = t.summary && t.summary.outcome;
+    const OUTCOME_TEXT = { success: "成功", empty: "空结果", partial: "部分完成", failed: "失败", stopped: "已停止", running: "进行中" };
+    const CITY_STATUS = { done: "已采", failed: "失败", skipped: "未执行" };
+    const items = (results && results.items) || [];
+    const total = results && results.total != null ? results.total : items.length;
+    const done = ["finished", "failed", "stopped"].includes(t.status);
+    const statusLabel = STATUS_TEXT[t.status] || t.status;
+    const stopBtn = t.status === "running"
+      ? `<button id="btnTaskStop">停止</button>`
+      : "";
+    el("taskDetail").innerHTML = `
+      <div class="card">
+        <h2>任务 <span class="mono">${esc(t.task_id)}</span></h2>
+        <div class="detail-sub">${esc(t.task_type)} · ${esc(statusLabel)}</div>
+        <table class="kv">
+          <tr><td class="k">状态</td><td>${esc(statusLabel)}${outcome ? ` · 结果 ${esc(OUTCOME_TEXT[outcome] || outcome)}` : ""}${done ? "" : ' <span class="hint">（自动刷新中）</span>'}</td></tr>
+          <tr><td class="k">已读条数</td><td><b>${total}</b> 条</td></tr>
+          <tr><td class="k">结果统计</td><td>${esc(Object.entries(counts).filter(([,n]) => n).map(([k,n]) => `${COUNT_LABEL[k] || k} ${n}`).join(" · ") || "无")}</td></tr>
+          ${t.error_text ? `<tr><td class="k">错误</td><td>${esc(t.error_text)}</td></tr>` : ""}
+        </table>
+        ${cities.length ? `<h3 style="margin-top:14px">每城市结果</h3>
+          <table class="kv">${cities.map(c => `<tr><td class="k">${esc(c.city)}</td><td>${esc(CITY_STATUS[c.status] || c.status)} · 职位 ${c.source_count} 条${c.error_code ? ` · <span style="color:var(--err)">${esc(c.error_code)}</span>` : ""}</td></tr>`).join("")}</table>` : ""}
+        ${issues.length ? `<div class="hint warn" style="margin-top:12px">缺口：${issues.map(i => esc(i.message || i.code)).join("；")}</div>` : ""}
+        <div class="actions" style="margin-top:10px">${stopBtn}</div>
+        <h3 style="margin-top:14px">逐项结果（${total}）</h3>
+        ${items.slice(0, 50).map(r => `
+          <div class="src-row">
+            <div class="t">#${r.item_index} ${esc(r.result_type)}</div>
+            <div class="s"><span>${esc(r.acquisition_context)}</span><span>${esc(r.channel)}</span>${r.error_text ? `<span style="color:var(--err)">${esc(r.error_text)}</span>` : ""}</div>
+          </div>`).join("") || '<div class="hint">暂无结果</div>'}
+        ${total > 50 ? `<div class="hint">仅显示前 50 条，共 ${total} 条</div>` : ""}
+      </div>`;
+    if (stopBtn) {
+      el("btnTaskStop").addEventListener("click", async () => {
+        await api(`/tasks/${id}/stop`, { method: "POST", body: {} });
+        renderTask(id);
+      });
+    }
+    if (done) stopWatching();
+  } catch (e) {
+    el("taskDetail").innerHTML = `<div class="card" style="color:var(--err)">任务详情加载失败：${esc(e.message || e)}</div>`;
+  }
+}
+
+function watchTask(id) {
+  stopWatching();
+  watchingTaskId = id;
+  el("taskQueryInput").value = id;
+  renderTask(id);
+  taskTimer = setInterval(() => renderTask(id), 2000);
+}
+
+function queryTasks() {
+  stopWatching();
+  el("taskList").innerHTML = `
+    <div class="head"><input id="taskQueryInput" placeholder="输入 task_id 查询" /><button id="btnTaskQuery">查询</button></div>`;
+  el("taskDetail").innerHTML = "";
+  el("btnTaskQuery").addEventListener("click", () => {
+    const id = el("taskQueryInput").value.trim();
+    if (!id) return;
+    watchTask(id);
+  });
+}
+
+bootstrap();
+</script>
+</body>
+</html>

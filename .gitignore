@@ -1,0 +1,41 @@
+# 运行数据与个人信息，绝不入库
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.part
+
+# 采集导出（含真实岗位与 HR 姓名，属于个人数据）
+Boss直聘_*.xlsx
+*.xlsx
+
+# 本地配置（可能含凭据引用、本机路径）
+config/jobjobvein.local.toml
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# 工作记忆与本地技能（含个人真实信息，绝不入库）
+.workbuddy/
